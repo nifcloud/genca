@@ -1,7 +1,6 @@
 package main
 
 import (
-	"./pkcs12"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -11,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/packer/builder/azure/pkcs12"
 	"io/ioutil"
 	"log"
 	"math/big"

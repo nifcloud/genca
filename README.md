@@ -44,6 +44,8 @@
 
 ## ソースコードのビルド
 
+    go get github.com/hashicorp/packer
+
     go build genca.go 
     # または
     gox
