@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/packer/builder/azure/pkcs12"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -86,8 +85,11 @@ func genkey(key_name string) {
 
 	now := time.Now()
 	var years = 4
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+
 	cert_template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
+		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   key_name,
 			Organization: []string{key_name},
@@ -235,10 +237,12 @@ func self_signed(crt_name string, ca_key_name string, ca_cert_name string, clien
 
 	now := time.Now()
 	var years = 4
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 
-	ComName := "client.nifcloud.local"
+	ComName := crt_name
 	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
+		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   ComName,
 			Organization: []string{"nifcloud.local"},
@@ -250,6 +254,7 @@ func self_signed(crt_name string, ca_key_name string, ca_cert_name string, clien
 		IsCA:         false,
 		SubjectKeyId: GenerateSKI(csr_pub),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+                ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 	}
 	crt_Bytes, err := x509.CreateCertificate(
 		rand.Reader, &template, ca_cert, csr_pub, ca_key)
@@ -269,28 +274,6 @@ func self_signed(crt_name string, ca_key_name string, ca_cert_name string, clien
 
 }
 
-func conv_pkcs12(cert_name string, priv_key_name string, pfx_name string) {
-	priv, err := readPrivateKey(priv_key_name)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	cert, err := readCertificateByte(cert_name)
-	pfxbyte, err := pkcs12.Encode(cert.Bytes, priv, "")
-	if err != nil {
-		err = fmt.Errorf("Failed to encode certificate as PFX: %s", err)
-		return
-	}
-
-	pfxOut, err := os.Create(pfx_name)
-	if err != nil {
-		log.Print("Failed to open "+pfx_name, err)
-		return
-	}
-	pfxOut.Write(pfxbyte)
-	pfxOut.Close()
-	log.Print("Written " + pfx_name + "\n")
-}
 
 func genCACert(caName string, years int) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -300,9 +283,11 @@ func genCACert(caName string, years int) {
 	}
 
 	now := time.Now()
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 
 	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
+		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   caName,
 			Organization: []string{caName},
@@ -374,6 +359,10 @@ func main() {
 	// Self Sign.
 	self_signed(name, domain+".CAkey.pem", domain+".CAcert.pem", name+".csr.pem")
 
-	// Convert PKCS12 (.pfx)
-	conv_pkcs12("client."+domain+".signed.crt.pem", "client."+domain+".pem", "client."+domain+".pfx")
+	name = "server." + domain
+
+	//Create Server Cert Private key
+	genkey(name)
+	// Self Sign.
+	self_signed(name, domain+".CAkey.pem", domain+".CAcert.pem", name+".csr.pem")
 }
